@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EPISODES DEMO · v1.0</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;width:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0f14;color:#e8f0f5}
+#map{position:absolute;inset:0}
+#panel{position:absolute;top:10px;left:10px;right:10px;z-index:1000;background:rgba(14,20,26,.96);border:1px solid rgba(120,140,160,.3);border-radius:10px;padding:10px 12px;backdrop-filter:blur(10px);max-width:420px}
+#panel h2{font-size:13px;font-weight:800;letter-spacing:.10em;text-transform:uppercase;color:#e8f0f5;margin-bottom:8px}
+#panel .btn-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+#panel button{background:#1a2632;border:1px solid rgba(120,140,160,.3);color:#e8f0f5;padding:8px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;flex:1 1 auto;min-width:120px}
+#panel button:active{background:#243040}
+#panel button.impact{background:rgba(220,38,38,.35);border-color:rgba(248,113,113,.5);color:#fecaca}
+#panel button.turn{background:rgba(59,130,246,.35);border-color:rgba(147,197,253,.5);color:#bfdbfe}
+#panel button.dive{background:rgba(220,38,38,.5);border-color:rgba(248,113,113,.7);color:#fff}
+#panel button.descend{background:rgba(251,191,36,.35);border-color:rgba(252,211,77,.5);color:#fef3c7}
+#panel button.loiter{background:rgba(167,139,250,.35);border-color:rgba(196,181,253,.5);color:#ede9fe}
+#panel button.loss{background:rgba(148,163,184,.35);border-color:rgba(203,213,225,.5);color:#f1f5f9}
+#panel button.reset{background:rgba(220,38,38,.2);border-color:rgba(248,113,113,.4);color:#fca5a5}
+#log{max-height:120px;overflow-y:auto;font-size:11px;font-family:ui-monospace,monospace;background:rgba(0,0,0,.3);border-radius:6px;padding:6px 8px;color:#94a3b8;line-height:1.4}
+#log .row{margin-bottom:2px}
+#log .ep{font-weight:800;color:#fbbf24}
+.leaflet-popup-content-wrapper{background:#0e141a;color:#e8f0f5;border-radius:10px;border:1px solid rgba(148,163,184,.3)}
+.leaflet-popup-tip{background:#0e141a}
+.leaflet-popup-content{margin:9px 11px;font-size:12px;line-height:1.45}
+.popup-title{font-weight:800;font-size:13px;margin-bottom:4px}
+.popup-episode{font-weight:800;font-size:11px;margin-top:5px;padding:3px 8px;border-radius:6px;background:rgba(148,163,184,.15);display:inline-block;border:1px solid rgba(148,163,184,.3)}
+.popup-episodes-list{margin-top:6px;padding:6px 8px;border-radius:5px;background:rgba(148,163,184,.08);border:1px dashed rgba(148,163,184,.4);font-size:10px;line-height:1.5;color:#cbd5e1}
+.popup-episodes-list .ep-title{font-weight:700;color:#e2e8f0;margin-bottom:3px}
+.popup-episodes-list .ep-item{display:flex;gap:5px;align-items:center;margin:1px 0}
+.popup-episodes-list .ep-time{color:#94a3b8;font-size:9px;margin-left:auto}
+.threat-wrap{position:relative;width:32px;height:32px}
+.threat-icon{width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:22px;filter:drop-shadow(0 0 5px rgba(0,0,0,.5))}
+.threat-icon.ep-descend{animation:epDescend .8s ease-in-out infinite}
+@keyframes epDescend{0%,100%{filter:drop-shadow(0 0 4px rgba(251,191,36,.9))}50%{filter:drop-shadow(0 0 14px rgba(251,191,36,1));opacity:.8}}
+.threat-icon.ep-dive{animation:epDive .5s ease-in-out infinite}
+@keyframes epDive{0%,100%{transform:scale(1);filter:drop-shadow(0 0 6px rgba(220,38,38,1))}50%{transform:scale(1.22);filter:drop-shadow(0 0 18px rgba(220,38,38,1));opacity:.75}}
+.threat-icon.ep-turn{animation:epTurn 1.2s ease-in-out infinite}
+@keyframes epTurn{0%,100%{filter:drop-shadow(0 0 4px rgba(96,165,250,.9))}50%{filter:drop-shadow(0 0 14px rgba(96,165,250,1));opacity:.85}}
+.threat-icon.ep-loiter{animation:epLoiter 1.5s ease-in-out infinite}
+@keyframes epLoiter{0%,100%{transform:rotate(0);filter:drop-shadow(0 0 4px rgba(167,139,250,.9))}50%{transform:rotate(8deg);filter:drop-shadow(0 0 14px rgba(167,139,250,1))}}
+.threat-icon.ep-impact{animation:epImpact .4s ease-in-out infinite}
+@keyframes epImpact{0%,100%{transform:scale(1)}50%{transform:scale(1.3);filter:drop-shadow(0 0 20px rgba(220,38,38,1))}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h2>🎬 Епізоди траєкторії — демо</h2>
+  <div class="btn-row">
+    <button class="descend" data-ep="descend">⬇ Зниження</button>
+    <button class="turn" data-ep="turn">↩ Розворот</button>
+    <button class="dive" data-ep="dive">🎯 Пікірування</button>
+  </div>
+  <div class="btn-row">
+    <button class="loiter" data-ep="loiter">🔄 Круговий обліт</button>
+    <button class="impact" data-ep="impact">💥 Ураження</button>
+    <button class="loss" data-ep="loss">❓ Втрата сигналу</button>
+  </div>
+  <div class="btn-row">
+    <button class="reset" id="btnReset">🗑 Скинути трек</button>
+  </div>
+  <div id="log"><div class="row">Готово. Натисніть будь-яку кнопку.</div></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+/* ============================================================
+   EPISODES DEMO
+============================================================ */
+const map=L.map("map",{center:[50.45,30.52],zoom:11});
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:16}).addTo(map);
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,opacity:.85}).addTo(map);
+
+/* Словарь эпизодов */
+const EPISODES=[
+  {id:"climb",   re:/(?:набирає|набирает)\s+висот|злетів|піднявся|взлетел|поднялся/i, icon:"⬆",  color:"#86efac", label:"Набір висоти"},
+  {id:"descend", re:/(?:знижується|снижается|втрачає\s+висот|теряет\s+высот|зниженн|снижен|зниження)/i, icon:"⬇", color:"#fbbf24", label:"Зниження"},
+  {id:"dive",    re:/(?:пікірує|пикирует|різке\s+зниження|резкое\s+снижение|падає\s+на|падает\s+на)/i, icon:"🎯", color:"#dc2626", label:"Пікірування"},
+  {id:"turn",    re:/(?:розвернувся|развернулся|змінив\s+курс|изменил\s+курс|курс\s+на|курсом\s+на)/i, icon:"↩", color:"#60a5fa", label:"Розворот"},
+  {id:"loiter",  re:/(?:кружляє|кружит|обліт|облет|барражує|барражирует|круговий)/i, icon:"🔄", color:"#a78bfa", label:"Круговий обліт"},
+  {id:"impact",  re:/(?:влучив|влучила|попала|приліт|прилет|уразив|поразил|удар\s+по)/i, icon:"💥", color:"#dc2626", label:"Ураження"},
+  {id:"loss",    re:/(?:зник|пропал|втрачено\s+зв.язок|потеряна\s+связь|збит|сбит)/i, icon:"❓", color:"#94a3b8", label:"Втрата сигналу"}
+];
+const EPISODE_TTL_MS=2*60*1000;
+
+function detectEpisodes(text){
+  if(!text) return [];
+  const out=[];
+  for(const e of EPISODES) if(e.re.test(text)) out.push({id:e.id,icon:e.icon,color:e.color,label:e.label});
+  return out;
+}
+
+function attachEpisodesToTrack(chain,episodes,msgMs){
+  if(!episodes.length||!chain) return;
+  chain.episodes=chain.episodes||[];
+  for(const e of episodes){
+    const last=chain.episodes[chain.episodes.length-1];
+    if(last&&last.id===e.id&&msgMs-last.t<60000) continue;
+    chain.episodes.push({...e,t:msgMs});
+    if(chain.episodes.length>20) chain.episodes.shift();
+  }
+}
+
+function currentEpisode(chain){
+  if(!chain||!chain.episodes||!chain.episodes.length) return null;
+  const last=chain.episodes[chain.episodes.length-1];
+  if(Date.now()-last.t>EPISODE_TTL_MS) return null;
+  return last;
+}
+
+/* ============================================================
+   ТЕСТОВЫЙ ТРЕК
+============================================================ */
+const KYIV=[50.45,30.52];
+let chain=null;
+let marker=null;
+let polyline=null;
+
+function buildIcon(chain){
+  const ep=currentEpisode(chain);
+  const classes=["threat-icon"];
+  if(ep){
+    if(ep.id==="descend")classes.push("ep-descend");
+    if(ep.id==="dive")classes.push("ep-dive");
+    if(ep.id==="turn")classes.push("ep-turn");
+    if(ep.id==="loiter")classes.push("ep-loiter");
+    if(ep.id==="impact")classes.push("ep-impact");
+  }
+  return L.divIcon({className:"",html:`<div class="threat-wrap"><div class="${classes.join(" ")}">🛸</div></div>`,iconSize:[32,32],iconAnchor:[16,16]});
+}
+
+function buildPopup(chain){
+  const ep=currentEpisode(chain);
+  const epLine=ep?`<div class="popup-episode" style="color:${ep.color}">${ep.icon} ${ep.label}</div>`:"";
+  const history=(chain.episodes||[]).slice(-6).map(e=>{
+    const t=new Date(e.t).toLocaleTimeString("uk-UA",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    return`<div class="ep-item"><span>${e.icon}</span><span style="color:${e.color};font-weight:700">${e.label}</span><span class="ep-time">${t}</span></div>`;
+  }).join("");
+  const histHtml=history?`<div class="popup-episodes-list"><div class="ep-title">🎬 Епізоди (${chain.episodes.length}):</div>${history}</div>`:"";
+  const pts=chain.points.map((p,i)=>`${i+1}. ${p.name}`).join(" → ");
+  return`<div class="popup-title">🛸 Герань-5</div>${epLine}<div style="margin-top:4px;color:#94a3b8">📍 ${pts}</div>${histHtml}`;
+}
+
+function refresh(){
+  if(!chain||!marker) return;
+  marker.setIcon(buildIcon(chain));
+  marker.setPopupContent(buildPopup(chain));
+  if(polyline) polyline.setLatLngs(chain.points.map(p=>[p.lat,p.lng]));
+}
+
+function log(text,isEpisode){
+  const l=document.getElementById("log");
+  const row=document.createElement("div");
+  row.className="row";
+  const t=new Date().toLocaleTimeString("uk-UA",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  row.innerHTML=`[${t}] ${isEpisode?`<span class="ep">🎬 ${text}</span>`:text}`;
+  l.insertBefore(row,l.firstChild);
+  while(l.children.length>20) l.removeChild(l.lastChild);
+}
+
+function resetTrack(){
+  if(marker) map.removeLayer(marker);
+  if(polyline) map.removeLayer(polyline);
+  chain={points:[],episodes:[]};
+  const start={lat:50.52,lng:30.35,name:"Вишгород"};
+  chain.points.push(start);
+  marker=L.marker([start.lat,start.lng],{icon:buildIcon(chain)});
+  marker.bindPopup(buildPopup(chain));
+  marker.addTo(map);
+  polyline=L.polyline([[start.lat,start.lng]],{color:"#dc2626",weight:2,dashArray:"6 5"}).addTo(map);
+  refresh();
+  log("Трек створено: Вишгород");
+}
+
+/* Клик по кнопке — добавляем точку + эпизод */
+document.querySelectorAll("button[data-ep]").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const epId=btn.getAttribute("data-ep");
+    const epMeta=EPISODES.find(e=>e.id===epId);
+    if(!epMeta||!chain) return;
+
+    // Смещаем точку на северо-восток (к Киеву), чтобы трек рос
+    const last=chain.points[chain.points.length-1];
+    const step=0.012;
+    const newPoint={lat:last.lat+step*0.7,lng:last.lng+step*1.1,name:getPlaceName(epId)};
+    chain.points.push(newPoint);
+
+    // Привязываем эпизод
+    attachEpisodesToTrack(chain,[{id:epMeta.id,icon:epMeta.icon,color:epMeta.color,label:epMeta.label}],Date.now());
+
+    // Добавляем точку на карту
+    polyline.setLatLngs(chain.points.map(p=>[p.lat,p.lng]));
+    marker.setLatLng([newPoint.lat,newPoint.lng]);
+    refresh();
+
+    // Открываем попап
+    marker.openPopup();
+
+    // Логируем
+    log(`📍 ${newPoint.name}`,false);
+    log(`${epMeta.icon} ${epMeta.label}`,true);
+  });
+});
+
+function getPlaceName(epId){
+  // Имитация: разные названия для каждой фазы
+  const names={
+    descend:"Почайна (зниження)",
+    turn:"Оболонь → Троєщина (розворот)",
+    dive:"Троєщина (пікірування)",
+    loiter:"Над Броварами (обліт)",
+    impact:"Ціль уражена",
+    loss:"Сигнал втрачено"
+  };
+  return names[epId]||"Невідомо";
+}
+
+document.getElementById("btnReset").addEventListener("click",resetTrack);
+
+/* Стартовый трек */
+resetTrack();
+
+/* Демо: автоматически показать detectEpisodes в консоли */
+console.log("detectEpisodes тест:",
+  detectEpisodes("Оболонь розвернувся на Троещину, пікірує")
+);
+</script>
+</body>
+</html>
